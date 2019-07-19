@@ -47,11 +47,12 @@ This module looks for `data-link-to-state` attributes and adds the
 right href to get us to that state. The state is a JS expression which
 is eval'd to produce a state overlay object.  And properties not
 mentioned in the overlay remain unchanged; set them to null or '' to
-remove them.  They're always strings, so for our purposes '' === null
-== undefined.  (Actually, you can provide a non-string and we'll
-JSON.stringify it for you, but it's always handed back to you as a
-string.) If your expression evals to function, it's called, passing it
-the current state, and letting it return the new state.
+remove them.  They're always strings, so for our purposes '', null,
+and undefined are the same. (Actually, you can provide a non-string
+and we'll JSON.stringify it for you, but it's always handed back to
+you as a string.) If your expression evals to function, it's called,
+passing it the current state, and letting it return the new state. In
+that case, it's not an overlay; it's just the new state.
 
 You can get that URL manually with `nav.link(...)` or go ahead and
 jump there, perhaps in an onclick handler, with `nav.jump(...)`. The
