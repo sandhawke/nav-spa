@@ -6,6 +6,7 @@
   "scripts": {
     "test": "npx standard && npx tap --cov test*.js test/*.js",
     "tap": "npx tap --cov test*.js test/*.js",
+    "browserify": "examples=$(cd examples; echo *); for x in $examples; do browserify examples/$x/index.js -o examples/$x/browserified.js; done",
     "coveralls": "export COVERALLS_REPO_TOKEN=$(cat $HOME/.coveralls-tokens/$npm_package_name); npx tap --cov test*.js test/*.js"
   },
   "repository": {
