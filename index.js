@@ -48,7 +48,7 @@ class NavStateManager extends EventEmitter {
     window.addEventListener('submit', onNav)
 
     if (!url) {
-      const rel = document.querySelector('link[rel="canonical"]')
+      const rel = document.querySelector('link[rel="start"]')
       if (rel) {
         url = rel.getAttribute('href')
       }

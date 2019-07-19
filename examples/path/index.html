@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" type="text/css" href="style.css" />
     <script src="browserified.js"></script>
-    <link rel="canonical" href="https://sandhawke.github.io/nav-spa/examples/path/" />
+    <link rel="start" href="https://sandhawke.github.io/nav-spa/examples/path/" />
     <style>
       div,p { text-align: center }
       #test {
@@ -24,7 +24,12 @@
     <p id="erase-on-start">Did you run: browserify -o browserified.js index.js</p>
     <p>Please notice the URL bar and link hover text</p>
     <p>Works in a simulated way when running from a <b>file: URL</b></p>
-    <p>Refresh and bookmarking require: (1) the server return the SPA's index.html at all the other paths, and (2) link-rel-canonical so the SPA can find home from those other pages.</p>
+    <p>Refresh and bookmarking require:
+      <ol>
+        <li>The server must return the SPA's HTML at all the other paths. For github-pages we couldn't do a server rewrite rule, so we used <pre>for x in green yellow purple gray; do ln -s index.html $x.html; done</pre></li>
+        <li>The HTML must have <pre>&lt;link rel="start" href="..."></pre> so the SPA can find where it should go for the empty state.</li>
+      </ol>
+    </p>
     <div id="test">Hello</div>
     <p>
       <a data-link-to-state="() => ({})">(default)</a>
