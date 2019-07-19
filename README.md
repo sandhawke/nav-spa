@@ -35,8 +35,8 @@ nav.on('change-color', ({key, oldValue, newValue}) => {
 })
 ```
 
-The state-changing navigation in this case are trigged by the HTML
-having bits like:
+The state-changing navigation in this case is set-up by HTML
+like this:
 
 ```html
       <a data-link-to-state="{color: 'green'}">green</a>
@@ -44,17 +44,28 @@ having bits like:
 ```
 
 This module looks for `data-link-to-state` attributes and adds the
-right href to get us to that state.  You can get that URL manually
-with `nav.link(...)` or go ahead and jump there, perhaps in an onclick
-handler, with `nav.jump(...)`.
+right href to get us to that state. The state is a JS expression which
+is eval'd to produce a state overlay object.  And properties not
+mentioned in the overlay remain unchanged; set them to null or '' to
+remove them.  They're always strings, so for our purposes '' === null
+== undefined.  (Actually, you can provide a non-string and we'll
+JSON.stringify it for you, but it's always handed back to you as a
+string.) If your expression evals to function, it's called, passing it
+the current state, and letting it return the new state.
 
-It also sets some CSS classes on the links, so you can show users
-which of the states they are currently in.
+You can get that URL manually with `nav.link(...)` or go ahead and
+jump there, perhaps in an onclick handler, with `nav.jump(...)`. The
+.jump function has an option to skip putting it in browser history.
+
+The module also sets some CSS classes on the links, so you can show
+users which of the states they are currently in.  It shouldn't matter
+how they got to that state.
 
 The "motion" example shows you can even change the url state at the
-browser frame rate. Seems to work okay, about as fast as that animate
-done without this library. For that, we don't put ever state in the
-browser history.  (Imagine clicking back through your history, one
+browser frame rate. Seems to work okay, about as fast as that
+animation done without this library (see cheating.html in the same
+directory to compare.). For that example, we don't put the state in
+the browser history.  (Imagine clicking back through your history, one
 animation frame at a time!)
 
 ## Custom Paths
@@ -68,10 +79,8 @@ up this SPA for all those URLs (but still let your CSS and JS files
 through). You also need to include a link.rel=start to the one that's
 the starting empty state.
 
-Example "path" shows this in action, with a slight variable of the
-colors example.
-
-The difference is this added code:
+Example "path" shows this in action, modifying "colors" by adding this
+code:
 
 ```js
 nav.customPath = { parse, unparse }
