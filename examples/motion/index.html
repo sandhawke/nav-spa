@@ -6,6 +6,12 @@
     <link rel="stylesheet" type="text/css" href="style.css" />
     <script src="_bundle.js"></script>
     <style>
+      #message {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 10;
+      }
       div,p { text-align: center }
       #test {
         margin: 4rem;
@@ -18,12 +24,12 @@
     </style>
 </head>
   <body>
-    <p id="erase-on-start">Did you run: browserify -o _bundle.js index.js</p>
-    <p>Please notice the URL bar</p>
-    <p>Refreshing and bookmarking will work in any state, even though
-    this is a single-page app</p>
-    <div id="test">Hello</div>
-    <p>There doesn't seem to be much performance penalty.  See cheating.html which does the same thing without nav-state.  Seems the same to me.</p>
+    <div id="message">
+      <p id="erase-on-start">Did you run: browserify -o _bundle.js index.js</p>
+      <p>Please notice the URL bar</p>
+      <p>Refreshing and bookmarking will work in any state, even though
+        this is a single-page app</p>
+      <p>There doesn't seem to be much performance penalty.  See cheating.html which does the same thing without nav-state.  Seems the same to me.</p>
     <p>
       <a data-link-to-state="{run: true}">start</a>
       <a data-link-to-state="{run: ''}">stop</a>
@@ -31,6 +37,8 @@
       <a data-link-to-state="{angle: 0.01}">3 O'Clock position</a>
       <a data-link-to-state="{angle: 3.14}">9 O'Clock position</a>
       <a data-link-to-state="() => ({})">reset</a>
-
+    </p>
+    </div>
+    <div id="test">Hello</div>
   </body>
 </html>

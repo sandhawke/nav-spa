@@ -199,7 +199,6 @@ class NavStateManager extends EventEmitter {
   }
   
   updateFromURL (url) {
-    debug('updateFromURL * %o', url)
     const atEnd = []
     window.url = url
     if (typeof url === 'string') {
@@ -223,7 +222,7 @@ class NavStateManager extends EventEmitter {
       // console.log('searchparam', key, newValue)
       newState[key] = newValue
     }
-    debug('searchparames done', newState)
+    debug('copied search params into newState: %o', newState)
 
     let path = url.pathname
     if (this.file) {
@@ -245,6 +244,7 @@ class NavStateManager extends EventEmitter {
         debug('have to delete value for', key)
         const oldValue = this.state[key]
         delete this.state[key]
+        changed = true
         const newValue = undefined
         atEnd.push(() => {this.emit(`change-${key}`, { key, oldValue, newValue })})
       }
@@ -267,7 +267,9 @@ class NavStateManager extends EventEmitter {
         console.error('bug newState!=state', {url, oldState, newState, state: this.state})
       }
     } else {
-      if (!shallowEqualObjects(oldState, this.state)) console.error('bug oldState!=state when no change')
+      if (!shallowEqualObjects(this.state, oldState)) {
+        console.error('bug oldState!=state when no change', {url, oldState, newState, state: this.state})
+      }
     }
     debug('final state: %o', this.state)
 
