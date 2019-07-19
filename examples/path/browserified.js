@@ -778,7 +778,7 @@ class NavStateManager extends EventEmitter {
     debug('init  done')
     this.emit('ready', this) // maybe handy; now you can use 'link'
   }
-  init (url) {
+  init (rootURL, thisURL) {
     window.addEventListener('popstate', (event) => {
       this.updateFromURL(document.location)
       // ignore event.state; we believe any state restored by the BACK
@@ -790,16 +790,16 @@ class NavStateManager extends EventEmitter {
     window.addEventListener('click', onNav)
     window.addEventListener('submit', onNav)
 
-    if (!url) {
+    if (!rootURL) {
       const rel = document.querySelector('link[rel="start"]')
       if (rel) {
-        url = rel.getAttribute('href')
+        rootURL = rel.getAttribute('href')
       }
     }
-    if (!url) {
-      url = window.location.href
+    if (!rootURL) {
+      rootURL = window.location.href
     }
-    const parsed = new URL(url)
+    const parsed = new URL(rootURL)
     
     this.origin = parsed.origin
     if (!this.pathPrefix) {
@@ -810,8 +810,10 @@ class NavStateManager extends EventEmitter {
       this.file = parsed.protocol + parsed.pathname
     }
 
+    if (!thisURL) thisURL = window.location.href
+
     this.ready = true
-    this.updateFromURL(url)
+    this.updateFromURL(thisURL)
     debug('init complete, this =', this)
   }
   
