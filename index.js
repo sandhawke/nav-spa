@@ -163,7 +163,7 @@ class NavStateManager extends EventEmitter {
     if (this.file) {
       if (path !== '/') newState.pathname = path
     } else {
-      url.pathname = path
+      url.pathname = this.pathPrefix + path
     }
     for (const [key, value] of Object.entries(newState)) {
       if (value !== undefined && value !== null && value !== '') {
@@ -222,6 +222,13 @@ class NavStateManager extends EventEmitter {
     if (this.file) {
       path = newState.pathname || '/'
       delete newState.pathname
+    } else {
+      if (path.startsWith(this.pathPrefix)) {
+        path = path.slice(this.pathPrefix.length)
+      } else {
+        console.error('app pathname %o doesnt start with app pathPrefix %o',
+                      path, this.pathPrefix)
+      }
     }
     
     const stateFromPath = decodeFromString(this.customPath, path)
