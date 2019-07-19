@@ -67,29 +67,31 @@ nav.customPath = { parse, unparse }
 
 function parse (path) {
   path = path.slice(1) // skip the leading slash
+  if (path === '') return { }
   if (/^\w+$/.test(path)) return { color: path }
   return 'NotFound'
 }
 
 function unparse (state) {
   if (state.color) return '/' + state.color
-  return undefined
+  return '/'
 }
 ```
 
-Your parse function takes a path and return an object like { prop:
-value } with whatever state it gleaned. It returns the magic string
-'NotFound' if it can't deal with this.  In practice that's used to
-limit what URLs we intercerpt clicks on.
+Your parse function takes a path and returns an object like { prop:
+value, prop2: value2, ... } with whatever state it gleaned. It returns
+the magic string 'NotFound' if it can't deal with this.  In practice
+that NotFound flag is used to limit what URLs we intercept clicks on.
 
-Your unparse function takes a state object like parse produces a
-string which encodes some or all of that state.
+Your unparse function takes a state object, like what parse produced,
+and returns string which encodes some or all of that state.
 
 This module automatically detects when state is encoded in a string
 and then skips encoding it in the query parameters. (It does this by
-calling your parse function on the string to see what state it will be
-able to extract.)
-
+calling your parse function on the string to see what will be able to
+extracted. It gives errors on the consule if it detects a situation
+where parse and unparse are not acting as inverse functions of each
+other.)
 
 [npm-image]: https://img.shields.io/npm/v/nav-spa.svg?style=flat-square
 [npm-url]: https://npmjs.org/package/nav-spa
