@@ -756,6 +756,7 @@ class NavStateManager extends EventEmitter {
     this.skipInit = false // for testing in node.js
     this.customPath = undefined
     this.customhash = undefined
+    this.pathPrefix = false  // false=autodetect; should start with /
     Object.assign(this, options || {})
     
     if (!this.skipInit) this.queueUpInit()
@@ -769,12 +770,10 @@ class NavStateManager extends EventEmitter {
     for the DOM before subscribing.
   */
   async queueUpInit () {
-    debug('init starts')
     await whenDomReady()
     debug('dom ready')
-    // await delay(1)
-    debug('DONE DONE delay done')
-    this.init(window.location)
+    await delay(1) // allow other dom-ready hooks to run, just in case
+    this.init()
     debug('init  done')
     this.emit('ready', this) // maybe handy; now you can use 'link'
   }
@@ -790,18 +789,29 @@ class NavStateManager extends EventEmitter {
     window.addEventListener('click', onNav)
     window.addEventListener('submit', onNav)
 
-    this.origin = url.origin
-    this.originalPathname = url.pathname
-    // with file: URLs we simulate the path with a path parameter for dev
-    if (url.protocol === 'file:') {
-      this.file = url.protocol + url.pathname
+    if (!url) {
+      const rel = document.querySelector('link[rel="canonical"]')
+      if (rel) {
+        url = rel.getAttribute('href')
+      }
     }
-    debug('are we running on a file: url?', url, this.file)
+    if (!url) {
+      url = window.location.href
+    }
+    const parsed = new URL(url)
+    
+    this.origin = parsed.origin
+    if (!this.pathPrefix) {
+      this.pathPrefix = parsed.pathname
+    }
+    // with file: URLs we simulate the path with a path parameter for dev
+    if (parsed.protocol === 'file:') {
+      this.file = parsed.protocol + parsed.pathname
+    }
 
     this.ready = true
-
     this.updateFromURL(url)
-    debug('navState init complete, %o', this.state)
+    debug('init complete, this =', this)
   }
   
   // intercept clicks so we don't need onclick all over the place
@@ -844,7 +854,7 @@ class NavStateManager extends EventEmitter {
     let urlIsOurs = false
     if (url.origin === this.origin) {
       debug('.. same origin')
-      if (url.pathname === this.originalPathname) {
+      if (url.pathname === this.pathPrefix) {
         debug('.. and its the URL we stated at')
         urlIsOurs = true
       } else {
@@ -882,7 +892,9 @@ class NavStateManager extends EventEmitter {
     const url = new URL(this.file ? this.file : this.origin)
     const sp = url.searchParams
 
-    let path = encodeInString(this.customPath, newState) || '/'
+    let path = this.pathPrefix + (
+      encodeInString(this.customPath, newState) || '')
+    
     const hash = encodeInString(this.customHash, newState)
     if (hash) url.hash = hash
 
