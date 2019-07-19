@@ -20,7 +20,7 @@ nav.on('change', ({ newState: { angle, run } }) => {
 
   if (run) {
     window.requestAnimationFrame(() => {
-      nav.jump({angle: angle + 0.02})
+      nav.jump({angle: angle + 0.02}, {noHistory: true})
     })
   }
 })
