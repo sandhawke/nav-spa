@@ -1044,10 +1044,13 @@ class NavStateManager extends EventEmitter {
       // debug('change = ', change)
       const report = {}
       elem.setAttribute('href', this.link(change, report))
+      debug('constructed link to state', report.newState)
       if (shallowEqualObjects( report.newState, this.state )) {
+        debug(' .. which matches this.state', this.state)
         elem.classList.add('href-to-here')
         elem.classList.remove('href-to-away')
       } else {
+        debug(' .. which DOES NOT match this.state', this.state)
         elem.classList.add('href-to-away')
         elem.classList.remove('href-to-here')
       }
