@@ -16,6 +16,8 @@ without actually being a SPA. This seemed simpler to me.
 
 ---
 
+![walkthru of one example](https://hawkeworks.com/misc/nav-spa2.gif)
+
 There are currently [some
 examples](https://sandhawke.github.io/nav-spa), running on github
 pages.  The simplest ('colors') is something like:
