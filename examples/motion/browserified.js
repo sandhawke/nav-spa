@@ -906,6 +906,8 @@ class NavStateManager extends EventEmitter {
       if (path !== '/') newState.pathname = path
     } else {
       url.pathname = this.pathPrefix + path
+      debug('concat pathPrefix %o and path %o to make pathname %o',
+            this.pathPrefix, path, url.pathname)
     }
     for (const [key, value] of Object.entries(newState)) {
       if (value !== undefined && value !== null && value !== '') {
