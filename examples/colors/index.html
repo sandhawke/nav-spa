@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="style.css" />
+    <script src="_bundle.js"></script>
+    <style>
+      div,p { text-align: center }
+      #test {
+        margin: 4rem;
+        font-size: 4rem; 
+      }
+      .href-to-here {
+        border-bottom: 4px solid black;
+      }
+      .href-to-away {
+        background-color: #ccc
+      }
+    </style>
+</head>
+  <body>
+    <p id="erase-on-start">Did you run: browserify -o _bundle.js index.js</p>
+    <p>Please notice the URL bar and link hover text</p>
+    <p>Refreshing and bookmarking will work in any state, even though
+    this is a single-page app</p>
+    <div id="test">Hello</div>
+    <p>
+      <a data-link-to-state="() => ({})">(default)</a>
+      <a data-link-to-state="{color: 'green'}">green</a>
+      <a data-link-to-state="{color: 'yellow'}">yellow</a>
+      <a data-link-to-state="{color: 'purple'}">purple</a>
+      <a data-link-to-state="{color: 'gray'}">gray</a>
+      </p>
+  </body>
+</html>

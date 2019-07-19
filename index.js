@@ -3,6 +3,7 @@ const KeyedSet = require('keyed-set')
 const EventEmitter = require('eventemitter3')
 const whenDomReady = require('when-dom-ready')
 const delay = require('delay')
+const { shallowEqualObjects } = require('shallow-equal')
 
 class NavStateManager extends EventEmitter {
   constructor (options) {
@@ -15,6 +16,8 @@ class NavStateManager extends EventEmitter {
        this.parseHash
        this.makeHash
        this.skipInit - mostly for testing without browser
+
+       Might be cleaner as this.customPath.make / .parse
     */
     this.state = {}
     if (!this.skipInit) this.queueUpInit()
@@ -35,7 +38,6 @@ class NavStateManager extends EventEmitter {
     debug('DONE DONE delay done')
     this.init(window.location)
     debug('init  done')
-    this.ready = true
     this.emit('ready', this) // maybe handy; now you can use 'link'
   }
   init (url) {
@@ -44,7 +46,6 @@ class NavStateManager extends EventEmitter {
       // ignore event.state; we believe any state restored by the BACK
       // button should be in the URL.  Does that apply even to
       // scrollstate? Hmm, to be considered.
-      this.emit('change') // so visibility can be updated, I guess
     })
 
     const onNav = this.onNav.bind(this)
@@ -56,20 +57,25 @@ class NavStateManager extends EventEmitter {
       this.file = url.protocol + url.pathname
     }
     debug('set this.file?', url, this)
-    
+
+    this.ready = true
+
     this.updateFromURL(url)
     debug('navState init complete, %o', this.state)
   }
   
   // intercept clicks so we don't need onclick all over the place
   onNav (event) {
-    debug('onNav intercepting click')
+    debug('onNav intercepting click', event)
     if (event.metaKey ||
         event.shiftKey ||
         event.altKey ||
         event.ctrlKey ||
         event.defaultPrevented
-       ) return
+       ) {
+      debug('ignoring it for one of our initial reasons')
+      return
+    }
     const target = event.target
     let href
     if (target.nodeName === 'A') {
@@ -135,7 +141,9 @@ class NavStateManager extends EventEmitter {
   }
   
   // returns the URL to use for a modified version of this state
-  link (change) {
+  //
+  // give some extra details in the report object
+  link (change, report) {
     if (!this.ready) console.error('nav.link called before ready')
     let newState = Object.assign({}, this.state)
     if (typeof change === 'function') {
@@ -143,10 +151,10 @@ class NavStateManager extends EventEmitter {
     } else {
       Object.assign(newState, change)
     }
-    debug({newState})
+    // debug({newState})
 
     // encode it into a URL
-    debug('in link, file? ', this.file)
+    // debug('in link, file? ', this.file)
     const url = new URL(this.file ? this.file : this.origin)
     const sp = url.searchParams
 
@@ -164,21 +172,35 @@ class NavStateManager extends EventEmitter {
       url.pathname = path
     }
     for (const [key, value] of Object.entries(newState)) {
-      if (value !== undefined) sp.append(key, value)
+      if (value !== undefined && value !== null && value !== '') {
+        let str = value
+        if (typeof str !== 'string') {
+          str = JSON.stringify(str)
+          // but it's up to you to see what's going on and parse it back out;
+          // this is just for convience in describing next states.
+        } 
+        sp.append(key, str)
+      }
     }
+    if (report) report.newState = newState
     return url.href
   }
 
   // like link + window.location=, for when nav state changes without
   // the user clicking on a link
-  jump (change) {
+  jump (change, options) {
     const href = this.link(change)
-    window.history.pushState(null, null, href)
+    if (options && options.noHistory) {
+      window.history.replaceState(null, null, href)
+    } else {
+      window.history.pushState(null, null, href)
+    }
     this.updateFromURL(href)
   }
   
   updateFromURL (url) {
     debug('updateFromURL * %o', url)
+    const atEnd = []
     window.url = url
     if (typeof url === 'string') {
       url = new URL(url)
@@ -189,16 +211,16 @@ class NavStateManager extends EventEmitter {
     }
     debug('updateFromURL %o', url.href, url)
     const params = url.searchParams || new URLSearchParams()
-    console.log({url, params})
+    // console.log({url, params})
     const oldState = Object.assign({}, this.state) // in case someone wants it
     let changed
 
-    let newState = {} // be we actually end up mutating this.state
+    let newState = {} // but we actually end up mutating this.state
 
     // query params come first, so they can be overwritten by path & hash
     window.params = params
     for (const [key, newValue] of params.entries()) {
-      console.log('searchparam', key, newValue)
+      // console.log('searchparam', key, newValue)
       newState[key] = newValue
     }
     debug('searchparames done', newState)
@@ -224,7 +246,7 @@ class NavStateManager extends EventEmitter {
         const oldValue = this.state[key]
         delete this.state[key]
         const newValue = undefined
-        this.emit(`change-${key}`, { key, oldValue, newValue })
+        atEnd.push(() => {this.emit(`change-${key}`, { key, oldValue, newValue })})
       }
     }
 
@@ -234,13 +256,49 @@ class NavStateManager extends EventEmitter {
       debug('newstate has', key, newValue, oldValue, oldValue !== newValue)
       if (oldValue !== newValue) {
         this.state[key] = newValue
-        this.emit(`change-${key}`, { key, oldValue, newValue })
+        atEnd.push(() => {this.emit(`change-${key}`, { key, oldValue, newValue })})
         changed = true
       }
     }
 
-    if (changed) this.emit('change', { newState, oldState })
+    if (changed) {
+      atEnd.push(() => {this.emit(`change`, { newState, oldState })})
+      if (!shallowEqualObjects(newState, this.state)) {
+        console.error('bug newState!=state', {url, oldState, newState, state: this.state})
+      }
+    } else {
+      if (!shallowEqualObjects(oldState, this.state)) console.error('bug oldState!=state when no change')
+    }
     debug('final state: %o', this.state)
+
+    // Modify href fields set with data-link-to-state so they are
+    // relative to the current state.  This is important for things
+    // like folks copying the URL following it. We could use that
+    // field ourselves, but let's avoid that error path by using
+    // the href like everyone else.
+    for (const elem of document.querySelectorAll('a[data-link-to-state]')) {
+      // debug('elem', elem)
+      let change = elem.getAttribute('data-link-to-state')
+      // debug('change = ', change)
+      change = eval(`( ${change} )`)
+      // debug('change = ', change)
+      const report = {}
+      elem.setAttribute('href', this.link(change, report))
+      if (shallowEqualObjects( report.newState, this.state )) {
+        elem.classList.add('href-to-here')
+        elem.classList.remove('href-to-away')
+      } else {
+        elem.classList.add('href-to-away')
+        elem.classList.remove('href-to-here')
+      }
+    }
+
+    // save the emits for the end, because they might call nav.jump
+    // which would land as back in this function, on a re-entrant
+    // call, which isn't going to work well, since they're sharing
+    // this.state and we have a promise to emit changes in the order
+    // they happen.
+    for (const f of atEnd) f()
   }
 }
 
@@ -248,3 +306,6 @@ class NavStateManager extends EventEmitter {
 const nav = new NavStateManager()
       
 module.exports = { nav, NavStateManager }
+
+window.dbg = () => { window.localStorage.setItem('debug', '*') }
+window.ndbg = () => { window.localStorage.setItem('debug', '') }

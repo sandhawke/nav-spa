@@ -29,6 +29,7 @@
     "delay": "^4.3.0",
     "eventemitter3": "^4.0.0",
     "keyed-set": "^0.6.2",
+    "shallow-equal": "^1.2.0",
     "when-dom-ready": "^1.2.12"
   }
 }
