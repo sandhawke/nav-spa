@@ -893,8 +893,7 @@ class NavStateManager extends EventEmitter {
     const url = new URL(this.file ? this.file : this.origin)
     const sp = url.searchParams
 
-    let path = this.pathPrefix + (
-      encodeInString(this.customPath, newState) || '')
+    let path = encodeInString(this.customPath, newState) || '/'
     
     const hash = encodeInString(this.customHash, newState)
     if (hash) url.hash = hash
@@ -906,6 +905,7 @@ class NavStateManager extends EventEmitter {
     if (this.file) {
       if (path !== '/') newState.pathname = path
     } else {
+      if (this.pathPrefix.endsWith('/')) path = path.slice('/')
       url.pathname = this.pathPrefix + path
       debug('concat pathPrefix %o and path %o to make pathname %o',
             this.pathPrefix, path, url.pathname)
