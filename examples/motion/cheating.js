@@ -1,4 +1,4 @@
-const { nav } = require('/home/sandro/Repos/nav-state')
+const { nav } = require('/home/sandro/Repos/nav-spa')
 
 let angle = 0
 

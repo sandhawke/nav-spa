@@ -1,4 +1,4 @@
-const debug = require('debug')('nav-state-y')
+const debug = require('debug')('nav-spa-y')
 const KeyedSet = require('keyed-set')
 const EventEmitter = require('eventemitter3')
 const whenDomReady = require('when-dom-ready')
@@ -8,18 +8,14 @@ const { shallowEqualObjects } = require('shallow-equal')
 class NavStateManager extends EventEmitter {
   constructor (options) {
     super()
-    Object.assign(this, options || {})
-    /* 
-       - Expecting -
-       this.parsePath
-       this.makePath
-       this.parseHash
-       this.makeHash
-       this.skipInit - mostly for testing without browser
 
-       Might be cleaner as this.customPath.make / .parse
-    */
+    // default options
     this.state = {}
+    this.skipInit = false // for testing in node.js
+    this.customPath = undefined
+    this.customhash = undefined
+    Object.assign(this, options || {})
+    
     if (!this.skipInit) this.queueUpInit()
     debug('constructor done')
   }
@@ -53,10 +49,12 @@ class NavStateManager extends EventEmitter {
     window.addEventListener('submit', onNav)
 
     this.origin = url.origin
+    this.originalPathname = url.pathname
+    // with file: URLs we simulate the path with a path parameter for dev
     if (url.protocol === 'file:') {
       this.file = url.protocol + url.pathname
     }
-    debug('set this.file?', url, this)
+    debug('are we running on a file: url?', url, this.file)
 
     this.ready = true
 
@@ -82,13 +80,13 @@ class NavStateManager extends EventEmitter {
       href = target.href
     }
     /* this kind of thing was in url-state, but not sure we want it
-    else if (target.nodeName === 'FORM') {
-      if (!target.action || target.action === window.location.href) {
-        event.preventDefault()
-        return
-      }
-      href = target.action
-    } 
+       else if (target.nodeName === 'FORM') {
+       if (!target.action || target.action === window.location.href) {
+       event.preventDefault()
+       return
+       }
+       href = target.action
+       } 
     */
     else {
       return
@@ -96,14 +94,27 @@ class NavStateManager extends EventEmitter {
 
     // because we .open() external ones, we'll never want default
     event.preventDefault()
-        
+    
     const url = new URL(href)
     
     debug('.. its a link')
-    
+
+    let urlIsOurs = false
     if (url.origin === this.origin) {
       debug('.. same origin')
-      debug('pretending to nav to', href)
+      if (url.pathname === this.originalPathname) {
+        debug('.. and its the URL we stated at')
+        urlIsOurs = true
+      } else {
+        debug('THIS.CUSTOMPATH', this.customPath)
+        if (decodeFromString(this.customPath, url.pathname)) {
+          debug('.. and its acceptable to customPath.parse')
+          urlIsOurs = true
+        }
+      }
+    }
+    if (urlIsOurs) {
+      debug('.. pretending to nav to', href)
       window.history.pushState(null, null, href)
       this.updateFromURL(url)
     } else {
@@ -111,35 +122,6 @@ class NavStateManager extends EventEmitter {
     }
   }
 
-  encodeInString (make, parse, state) {
-    let out
-    if (make) {
-      out = make(state)
-      if (out !== undefined) {
-        const used = parse(out)
-        for (const [key, value] of Object.entries(used)) {
-          const oVal = state[key]
-          if (oVal !== value) {
-            console.error(`Error encoding state[${JSON.stringify(key)}], parse(make(${JSON.stringify(oVal)})) !== expected ${JSON.stringify(value)}`)
-          }
-          delete state[key]
-        }
-      }
-    }
-    return out
-  }
-
-  decodeFromString (make, parse, str) {
-    if (parse) {
-      const state = parse(str)
-      // just a check ourselves
-      const str2 = this.encodeInString(make, parse, state)
-      if (str != str2) console.error(`nav-state: decodeFromString loop check failed on ${JSON.stringify(str)}`)
-      return state
-    }
-    return {}
-  }
-  
   // returns the URL to use for a modified version of this state
   //
   // give some extra details in the report object
@@ -158,8 +140,8 @@ class NavStateManager extends EventEmitter {
     const url = new URL(this.file ? this.file : this.origin)
     const sp = url.searchParams
 
-    let path = this.encodeInString(this.makePath, this.parsePath, newState) || '/'
-    const hash = this.encodeInString(this.makeHash, this.parseHash, newState)
+    let path = encodeInString(this.customPath, newState) || '/'
+    const hash = encodeInString(this.customHash, newState)
     if (hash) url.hash = hash
 
     // don't use encodeURIComponent because it's too aggressive sometimes
@@ -226,13 +208,20 @@ class NavStateManager extends EventEmitter {
 
     let path = url.pathname
     if (this.file) {
-      path = '/' + (newState.path || '')
-      delete newState.path
+      path = newState.pathname || '/'
+      delete newState.pathname
     }
-    Object.assign(newState, this.decodeFromString(
-      this.makePath, this.parsePath, path))
-    Object.assign(newState, this.decodeFromString(
-      this.makeHash, this.parseHash, url.hash))
+    
+    const stateFromPath = decodeFromString(this.customPath, path)
+    if (stateFromPath === 'NotFound') {
+      console.error('app running at pathname it isnt coded to understand', JSON.stringify(path))
+    } else {
+      Object.assign(newState, stateFromPath)
+    }
+    // bad hash in browsers should fail silently, I believe
+    Object.assign(newState, decodeFromString(this.customHash, url.hash, {}))
+
+    
     debug('final newState: %o', newState)
     debug('and   oldState: %o', oldState)
 
@@ -246,7 +235,8 @@ class NavStateManager extends EventEmitter {
         delete this.state[key]
         changed = true
         const newValue = undefined
-        atEnd.push(() => {this.emit(`change-${key}`, { key, oldValue, newValue })})
+        atEnd.push(() => {this.emit(`change-${key}`,
+                                    { key, oldValue, newValue })})
       }
     }
 
@@ -256,7 +246,8 @@ class NavStateManager extends EventEmitter {
       debug('newstate has', key, newValue, oldValue, oldValue !== newValue)
       if (oldValue !== newValue) {
         this.state[key] = newValue
-        atEnd.push(() => {this.emit(`change-${key}`, { key, oldValue, newValue })})
+        atEnd.push(() => {this.emit(`change-${key}`,
+                                    { key, oldValue, newValue })})
         changed = true
       }
     }
@@ -304,10 +295,47 @@ class NavStateManager extends EventEmitter {
   }
 }
 
+function encodeInString (custom, state) {
+  let out
+  if (custom) {
+    const {unparse, parse} = custom
+    debug('encodeInString', {unparse, parse, state})
+    out = unparse(state)
+    if (out === undefined) return out
+    const used = parse(out)
+    for (const [key, value] of Object.entries(used)) {
+      const oVal = state[key]
+      if (oVal !== value) {
+        console.error(`Error encoding state[${JSON.stringify(key)}], parse(unparse(${JSON.stringify(oVal)})) !== expected ${JSON.stringify(value)}`)
+      }
+      delete state[key]
+    }
+  }
+  return out
+}
+
+// return {} if there's no custom handler, but return
+// ifNotFound if custom handler can't handle this string
+//
+function decodeFromString (custom, str, ifNotFound = 'NotFound') {
+  if (custom) {
+    const {unparse, parse} = custom
+    debug('decodeFromString', {unparse, parse, str})
+    const state = parse(str)
+    if (state === 'NotFound') return ifNotFound
+    // just a check ourselves
+    const str2 = encodeInString({unparse, parse}, Object.assign({}, state))
+    if (str != str2) console.error(`nav-spa: decodeFromString loop check failed on ${JSON.stringify(str)} which produced state ${JSON.stringify(state)} which re-encoded as ${JSON.stringify(str2)}`)
+    return state
+  }
+  return {}
+}
+
 // usually it's fine to just have the one instance
 const nav = new NavStateManager()
-      
+
 module.exports = { nav, NavStateManager }
 
 window.dbg = () => { window.localStorage.setItem('debug', '*') }
 window.ndbg = () => { window.localStorage.setItem('debug', '') }
+window.nav = nav

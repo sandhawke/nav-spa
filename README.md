@@ -44,16 +44,51 @@ right href to get us to that state.  You can get that URL manually
 with `nav.link(...)` or go ahead and jump there, perhaps in an onclick
 handler, with `nav.jump(...)`.
 
-By default we store all the state in query parameters. You can provide
-functions to map some state properties into the pathname and/or hash
-if you want. If you store state in the pathname, your web server will
-have to serve up this SPA for all those URLs (but still let your CSS
-and JS files through).
+example/motion shows you can even change the url state at the browser
+frame rate. Seems to work okay. In that case we don't put ever state
+in the browser history.
 
-Example 2 shows you can even change the url state at the browser frame
-rate. In that case, we don't 
+## Custom Paths
 
+By default we store all the state in query parameters. You can (and
+probable should) provide functions to map some state properties into
+the pathname (and/or hash).
 
+If you store state in the pathname, your web server will have to serve
+up this SPA for all those URLs (but still let your CSS and JS files
+through).
+
+examples/path shows a path version of examples/color
+
+The difference is this added code:
+
+```js
+nav.customPath = { parse, unparse }
+
+function parse (path) {
+  path = path.slice(1) // skip the leading slash
+  if (/^\w+$/.test(path)) return { color: path }
+  return 'NotFound'
+}
+
+function unparse (state) {
+  if (state.color) return '/' + state.color
+  return undefined
+}
+```
+
+Your parse function takes a path and return an object like { prop:
+value } with whatever state it gleaned. It returns the magic string
+'NotFound' if it can't deal with this.  In practice that's used to
+limit what URLs we intercerpt clicks on.
+
+Your unparse function takes a state object like parse produces a
+string which encodes some or all of that state.
+
+This module automatically detects when state is encoded in a string
+and then skips encoding it in the query parameters. (It does this by
+calling your parse function on the string to see what state it will be
+able to extract.)
 
 
 [npm-image]: https://img.shields.io/npm/v/nav-spa.svg?style=flat-square

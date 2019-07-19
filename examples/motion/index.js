@@ -1,4 +1,4 @@
-const { nav } = require('/home/sandro/Repos/nav-state')
+const { nav } = require('/home/sandro/Repos/nav-spa')
 
 nav.on('ready', () => {
   document.getElementById('erase-on-start').style.display = 'none'

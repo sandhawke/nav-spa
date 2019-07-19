@@ -1,7 +1,7 @@
 {
-  "name": "nav-state2",
+  "name": "nav-spa",
   "version": "0.0.0",
-  "description": "Easy HATEOAS for your SPA",
+  "description": "Give you SPA normal URL-based state navigation",
   "main": "index.js",
   "scripts": {
     "test": "npx standard && npx tap --cov test*.js test/*.js",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sandhawke/nav-state.git"
+    "url": "git+https://github.com/sandhawke/nav-spa.git"
   },
   "keywords": [
     "sandhawke"
@@ -18,9 +18,9 @@
   "author": "Sandro Hawke (http://hawke.org/sandro)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/sandhawke/nav-state/issues"
+    "url": "https://github.com/sandhawke/nav-spa/issues"
   },
-  "homepage": "https://github.com/sandhawke/nav-state#readme",
+  "homepage": "https://github.com/sandhawke/nav-spa#readme",
   "devDependencies": {
     "tape": "^4.9.1"
   },
