@@ -162,11 +162,12 @@ class NavStateManager extends EventEmitter {
     if (this.file) {
       if (path !== '/') newState.pathname = path
     } else {
-      if (this.pathPrefix.endsWith('/')) path = path.slice('/')
+      if (this.pathPrefix.endsWith('/')) path = path.slice(1)
       url.pathname = this.pathPrefix + path
       debug('concat pathPrefix %o and path %o to make pathname %o',
             this.pathPrefix, path, url.pathname)
     }
+    
     for (const [key, value] of Object.entries(newState)) {
       if (value !== undefined && value !== null && value !== '') {
         let str = value
