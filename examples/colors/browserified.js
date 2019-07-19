@@ -872,6 +872,9 @@ class NavStateManager extends EventEmitter {
     } else {
       Object.assign(newState, change)
     }
+    // make copy, because encodeInString removes the properties it encodes
+    if (report) report.newState = Object.assign({}, newState)
+    
     // debug({newState})
 
     // encode it into a URL
@@ -908,7 +911,6 @@ class NavStateManager extends EventEmitter {
         sp.append(key, str)
       }
     }
-    if (report) report.newState = newState
     return url.href
   }
 
