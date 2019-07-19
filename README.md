@@ -16,10 +16,12 @@ without actually being a SPA. This seemed simpler to me.
 
 ---
 
-There are currently <a href="https://sandhawke.github.io/nav-spa>three examples provided</a>, running on git pages.  The first ('colors') is something like:
+There are currently [some
+examples](https://sandhawke.github.io/nav-spa), running on github
+pages.  The simplest ('colors') is something like:
 
 ```js
-const { nav } = require('nav-spa')
+const nav = require('nav-spa')
 
 nav.on('change-color', ({key, oldValue, newValue}) => {
   console.log('Nav-state property %o changed value from %o to %o',

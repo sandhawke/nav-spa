@@ -1,1 +1,42 @@
-index.html
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="style.css" />
+    <script src="browserified.js"></script>
+    <link rel="start" href="https://sandhawke.github.io/nav-spa/examples/path/" />
+    <style>
+      div,p { margin: 2rem; }
+      #test {
+        margin: 4rem;
+        font-size: 4rem; 
+      }
+      .href-to-here {
+        border-bottom: 4px solid black;
+      }
+      .href-to-away {
+        background-color: #ccc
+      }
+    </style>
+</head>
+  <body>
+    <p id="erase-on-start">Did you run: browserify -o browserified.js index.js</p>
+    <p>Please notice the URL bar and link hover text</p>
+    <p>Works in a simulated way when running from a <b>file: URL</b></p>
+    <p>Refresh and bookmarking require:
+      <ol>
+        <li>The server must return the SPA's HTML at all the other paths. For github-pages we couldn't do a server rewrite rule, so we used <pre>for x in green yellow purple gray; do ln -s index.html $x.html; done</pre></li>
+        <li>The HTML must have <pre>&lt;link rel="start" href="..."></pre> so the SPA can find where it should go for the empty state.</li>
+      </ol>
+    </p>
+    <div id="test">Hello</div>
+    <p>
+      <a data-link-to-state="() => ({})">(default)</a>
+      <a data-link-to-state="{color: 'green'}">green</a>
+      <a data-link-to-state="{color: 'yellow'}">yellow</a>
+      <a data-link-to-state="{color: 'purple'}">purple</a>
+      <a data-link-to-state="{color: 'gray'}">gray</a>
+      </p>
+  </body>
+</html>

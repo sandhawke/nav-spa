@@ -1,4 +1,4 @@
-const { nav } = require('/home/sandro/Repos/nav-spa')
+const nav = require('nav-spa')
 
 nav.on('ready', () => {
   document.getElementById('erase-on-start').style.display = 'none'
@@ -11,8 +11,8 @@ nav.on('change', ({ newState: { angle, run } }) => {
 
   const width = document.body.clientWidth
   const r = width / 4
-  const x = Math.round(Math.cos(angle) * r + (width/4))
-  const y = Math.round(Math.sin(angle) * r + (width/4))
+  const x = Math.round(Math.cos(angle) * r + (width / 4))
+  const y = Math.round(Math.sin(angle) * r + (width / 4))
 
   const elem = document.getElementById('test')
   elem.style.left = `${x}px`
@@ -20,9 +20,7 @@ nav.on('change', ({ newState: { angle, run } }) => {
 
   if (run) {
     window.requestAnimationFrame(() => {
-      nav.jump({angle: angle + 0.02}, {noHistory: true})
+      nav.jump({ angle: angle + 0.02 }, { noHistory: true })
     })
   }
 })
-
-

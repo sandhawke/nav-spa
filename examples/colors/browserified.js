@@ -1,529 +1,4 @@
 (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var objectCreate = Object.create || objectCreatePolyfill
-var objectKeys = Object.keys || objectKeysPolyfill
-var bind = Function.prototype.bind || functionBindPolyfill
-
-function EventEmitter() {
-  if (!this._events || !Object.prototype.hasOwnProperty.call(this, '_events')) {
-    this._events = objectCreate(null);
-    this._eventsCount = 0;
-  }
-
-  this._maxListeners = this._maxListeners || undefined;
-}
-module.exports = EventEmitter;
-
-// Backwards-compat with node 0.10.x
-EventEmitter.EventEmitter = EventEmitter;
-
-EventEmitter.prototype._events = undefined;
-EventEmitter.prototype._maxListeners = undefined;
-
-// By default EventEmitters will print a warning if more than 10 listeners are
-// added to it. This is a useful default which helps finding memory leaks.
-var defaultMaxListeners = 10;
-
-var hasDefineProperty;
-try {
-  var o = {};
-  if (Object.defineProperty) Object.defineProperty(o, 'x', { value: 0 });
-  hasDefineProperty = o.x === 0;
-} catch (err) { hasDefineProperty = false }
-if (hasDefineProperty) {
-  Object.defineProperty(EventEmitter, 'defaultMaxListeners', {
-    enumerable: true,
-    get: function() {
-      return defaultMaxListeners;
-    },
-    set: function(arg) {
-      // check whether the input is a positive number (whose value is zero or
-      // greater and not a NaN).
-      if (typeof arg !== 'number' || arg < 0 || arg !== arg)
-        throw new TypeError('"defaultMaxListeners" must be a positive number');
-      defaultMaxListeners = arg;
-    }
-  });
-} else {
-  EventEmitter.defaultMaxListeners = defaultMaxListeners;
-}
-
-// Obviously not all Emitters should be limited to 10. This function allows
-// that to be increased. Set to zero for unlimited.
-EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
-  if (typeof n !== 'number' || n < 0 || isNaN(n))
-    throw new TypeError('"n" argument must be a positive number');
-  this._maxListeners = n;
-  return this;
-};
-
-function $getMaxListeners(that) {
-  if (that._maxListeners === undefined)
-    return EventEmitter.defaultMaxListeners;
-  return that._maxListeners;
-}
-
-EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
-  return $getMaxListeners(this);
-};
-
-// These standalone emit* functions are used to optimize calling of event
-// handlers for fast cases because emit() itself often has a variable number of
-// arguments and can be deoptimized because of that. These functions always have
-// the same number of arguments and thus do not get deoptimized, so the code
-// inside them can execute faster.
-function emitNone(handler, isFn, self) {
-  if (isFn)
-    handler.call(self);
-  else {
-    var len = handler.length;
-    var listeners = arrayClone(handler, len);
-    for (var i = 0; i < len; ++i)
-      listeners[i].call(self);
-  }
-}
-function emitOne(handler, isFn, self, arg1) {
-  if (isFn)
-    handler.call(self, arg1);
-  else {
-    var len = handler.length;
-    var listeners = arrayClone(handler, len);
-    for (var i = 0; i < len; ++i)
-      listeners[i].call(self, arg1);
-  }
-}
-function emitTwo(handler, isFn, self, arg1, arg2) {
-  if (isFn)
-    handler.call(self, arg1, arg2);
-  else {
-    var len = handler.length;
-    var listeners = arrayClone(handler, len);
-    for (var i = 0; i < len; ++i)
-      listeners[i].call(self, arg1, arg2);
-  }
-}
-function emitThree(handler, isFn, self, arg1, arg2, arg3) {
-  if (isFn)
-    handler.call(self, arg1, arg2, arg3);
-  else {
-    var len = handler.length;
-    var listeners = arrayClone(handler, len);
-    for (var i = 0; i < len; ++i)
-      listeners[i].call(self, arg1, arg2, arg3);
-  }
-}
-
-function emitMany(handler, isFn, self, args) {
-  if (isFn)
-    handler.apply(self, args);
-  else {
-    var len = handler.length;
-    var listeners = arrayClone(handler, len);
-    for (var i = 0; i < len; ++i)
-      listeners[i].apply(self, args);
-  }
-}
-
-EventEmitter.prototype.emit = function emit(type) {
-  var er, handler, len, args, i, events;
-  var doError = (type === 'error');
-
-  events = this._events;
-  if (events)
-    doError = (doError && events.error == null);
-  else if (!doError)
-    return false;
-
-  // If there is no 'error' event listener then throw.
-  if (doError) {
-    if (arguments.length > 1)
-      er = arguments[1];
-    if (er instanceof Error) {
-      throw er; // Unhandled 'error' event
-    } else {
-      // At least give some kind of context to the user
-      var err = new Error('Unhandled "error" event. (' + er + ')');
-      err.context = er;
-      throw err;
-    }
-    return false;
-  }
-
-  handler = events[type];
-
-  if (!handler)
-    return false;
-
-  var isFn = typeof handler === 'function';
-  len = arguments.length;
-  switch (len) {
-      // fast cases
-    case 1:
-      emitNone(handler, isFn, this);
-      break;
-    case 2:
-      emitOne(handler, isFn, this, arguments[1]);
-      break;
-    case 3:
-      emitTwo(handler, isFn, this, arguments[1], arguments[2]);
-      break;
-    case 4:
-      emitThree(handler, isFn, this, arguments[1], arguments[2], arguments[3]);
-      break;
-      // slower
-    default:
-      args = new Array(len - 1);
-      for (i = 1; i < len; i++)
-        args[i - 1] = arguments[i];
-      emitMany(handler, isFn, this, args);
-  }
-
-  return true;
-};
-
-function _addListener(target, type, listener, prepend) {
-  var m;
-  var events;
-  var existing;
-
-  if (typeof listener !== 'function')
-    throw new TypeError('"listener" argument must be a function');
-
-  events = target._events;
-  if (!events) {
-    events = target._events = objectCreate(null);
-    target._eventsCount = 0;
-  } else {
-    // To avoid recursion in the case that type === "newListener"! Before
-    // adding it to the listeners, first emit "newListener".
-    if (events.newListener) {
-      target.emit('newListener', type,
-          listener.listener ? listener.listener : listener);
-
-      // Re-assign `events` because a newListener handler could have caused the
-      // this._events to be assigned to a new object
-      events = target._events;
-    }
-    existing = events[type];
-  }
-
-  if (!existing) {
-    // Optimize the case of one listener. Don't need the extra array object.
-    existing = events[type] = listener;
-    ++target._eventsCount;
-  } else {
-    if (typeof existing === 'function') {
-      // Adding the second element, need to change to array.
-      existing = events[type] =
-          prepend ? [listener, existing] : [existing, listener];
-    } else {
-      // If we've already got an array, just append.
-      if (prepend) {
-        existing.unshift(listener);
-      } else {
-        existing.push(listener);
-      }
-    }
-
-    // Check for listener leak
-    if (!existing.warned) {
-      m = $getMaxListeners(target);
-      if (m && m > 0 && existing.length > m) {
-        existing.warned = true;
-        var w = new Error('Possible EventEmitter memory leak detected. ' +
-            existing.length + ' "' + String(type) + '" listeners ' +
-            'added. Use emitter.setMaxListeners() to ' +
-            'increase limit.');
-        w.name = 'MaxListenersExceededWarning';
-        w.emitter = target;
-        w.type = type;
-        w.count = existing.length;
-        if (typeof console === 'object' && console.warn) {
-          console.warn('%s: %s', w.name, w.message);
-        }
-      }
-    }
-  }
-
-  return target;
-}
-
-EventEmitter.prototype.addListener = function addListener(type, listener) {
-  return _addListener(this, type, listener, false);
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.prependListener =
-    function prependListener(type, listener) {
-      return _addListener(this, type, listener, true);
-    };
-
-function onceWrapper() {
-  if (!this.fired) {
-    this.target.removeListener(this.type, this.wrapFn);
-    this.fired = true;
-    switch (arguments.length) {
-      case 0:
-        return this.listener.call(this.target);
-      case 1:
-        return this.listener.call(this.target, arguments[0]);
-      case 2:
-        return this.listener.call(this.target, arguments[0], arguments[1]);
-      case 3:
-        return this.listener.call(this.target, arguments[0], arguments[1],
-            arguments[2]);
-      default:
-        var args = new Array(arguments.length);
-        for (var i = 0; i < args.length; ++i)
-          args[i] = arguments[i];
-        this.listener.apply(this.target, args);
-    }
-  }
-}
-
-function _onceWrap(target, type, listener) {
-  var state = { fired: false, wrapFn: undefined, target: target, type: type, listener: listener };
-  var wrapped = bind.call(onceWrapper, state);
-  wrapped.listener = listener;
-  state.wrapFn = wrapped;
-  return wrapped;
-}
-
-EventEmitter.prototype.once = function once(type, listener) {
-  if (typeof listener !== 'function')
-    throw new TypeError('"listener" argument must be a function');
-  this.on(type, _onceWrap(this, type, listener));
-  return this;
-};
-
-EventEmitter.prototype.prependOnceListener =
-    function prependOnceListener(type, listener) {
-      if (typeof listener !== 'function')
-        throw new TypeError('"listener" argument must be a function');
-      this.prependListener(type, _onceWrap(this, type, listener));
-      return this;
-    };
-
-// Emits a 'removeListener' event if and only if the listener was removed.
-EventEmitter.prototype.removeListener =
-    function removeListener(type, listener) {
-      var list, events, position, i, originalListener;
-
-      if (typeof listener !== 'function')
-        throw new TypeError('"listener" argument must be a function');
-
-      events = this._events;
-      if (!events)
-        return this;
-
-      list = events[type];
-      if (!list)
-        return this;
-
-      if (list === listener || list.listener === listener) {
-        if (--this._eventsCount === 0)
-          this._events = objectCreate(null);
-        else {
-          delete events[type];
-          if (events.removeListener)
-            this.emit('removeListener', type, list.listener || listener);
-        }
-      } else if (typeof list !== 'function') {
-        position = -1;
-
-        for (i = list.length - 1; i >= 0; i--) {
-          if (list[i] === listener || list[i].listener === listener) {
-            originalListener = list[i].listener;
-            position = i;
-            break;
-          }
-        }
-
-        if (position < 0)
-          return this;
-
-        if (position === 0)
-          list.shift();
-        else
-          spliceOne(list, position);
-
-        if (list.length === 1)
-          events[type] = list[0];
-
-        if (events.removeListener)
-          this.emit('removeListener', type, originalListener || listener);
-      }
-
-      return this;
-    };
-
-EventEmitter.prototype.removeAllListeners =
-    function removeAllListeners(type) {
-      var listeners, events, i;
-
-      events = this._events;
-      if (!events)
-        return this;
-
-      // not listening for removeListener, no need to emit
-      if (!events.removeListener) {
-        if (arguments.length === 0) {
-          this._events = objectCreate(null);
-          this._eventsCount = 0;
-        } else if (events[type]) {
-          if (--this._eventsCount === 0)
-            this._events = objectCreate(null);
-          else
-            delete events[type];
-        }
-        return this;
-      }
-
-      // emit removeListener for all listeners on all events
-      if (arguments.length === 0) {
-        var keys = objectKeys(events);
-        var key;
-        for (i = 0; i < keys.length; ++i) {
-          key = keys[i];
-          if (key === 'removeListener') continue;
-          this.removeAllListeners(key);
-        }
-        this.removeAllListeners('removeListener');
-        this._events = objectCreate(null);
-        this._eventsCount = 0;
-        return this;
-      }
-
-      listeners = events[type];
-
-      if (typeof listeners === 'function') {
-        this.removeListener(type, listeners);
-      } else if (listeners) {
-        // LIFO order
-        for (i = listeners.length - 1; i >= 0; i--) {
-          this.removeListener(type, listeners[i]);
-        }
-      }
-
-      return this;
-    };
-
-function _listeners(target, type, unwrap) {
-  var events = target._events;
-
-  if (!events)
-    return [];
-
-  var evlistener = events[type];
-  if (!evlistener)
-    return [];
-
-  if (typeof evlistener === 'function')
-    return unwrap ? [evlistener.listener || evlistener] : [evlistener];
-
-  return unwrap ? unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
-}
-
-EventEmitter.prototype.listeners = function listeners(type) {
-  return _listeners(this, type, true);
-};
-
-EventEmitter.prototype.rawListeners = function rawListeners(type) {
-  return _listeners(this, type, false);
-};
-
-EventEmitter.listenerCount = function(emitter, type) {
-  if (typeof emitter.listenerCount === 'function') {
-    return emitter.listenerCount(type);
-  } else {
-    return listenerCount.call(emitter, type);
-  }
-};
-
-EventEmitter.prototype.listenerCount = listenerCount;
-function listenerCount(type) {
-  var events = this._events;
-
-  if (events) {
-    var evlistener = events[type];
-
-    if (typeof evlistener === 'function') {
-      return 1;
-    } else if (evlistener) {
-      return evlistener.length;
-    }
-  }
-
-  return 0;
-}
-
-EventEmitter.prototype.eventNames = function eventNames() {
-  return this._eventsCount > 0 ? Reflect.ownKeys(this._events) : [];
-};
-
-// About 1.5x faster than the two-arg version of Array#splice().
-function spliceOne(list, index) {
-  for (var i = index, k = i + 1, n = list.length; k < n; i += 1, k += 1)
-    list[i] = list[k];
-  list.pop();
-}
-
-function arrayClone(arr, n) {
-  var copy = new Array(n);
-  for (var i = 0; i < n; ++i)
-    copy[i] = arr[i];
-  return copy;
-}
-
-function unwrapListeners(arr) {
-  var ret = new Array(arr.length);
-  for (var i = 0; i < ret.length; ++i) {
-    ret[i] = arr[i].listener || arr[i];
-  }
-  return ret;
-}
-
-function objectCreatePolyfill(proto) {
-  var F = function() {};
-  F.prototype = proto;
-  return new F;
-}
-function objectKeysPolyfill(obj) {
-  var keys = [];
-  for (var k in obj) if (Object.prototype.hasOwnProperty.call(obj, k)) {
-    keys.push(k);
-  }
-  return k;
-}
-function functionBindPolyfill(context) {
-  var fn = this;
-  return function () {
-    return fn.apply(context, arguments);
-  };
-}
-
-},{}],2:[function(require,module,exports){
 // shim for using process in browser
 var process = module.exports = {};
 
@@ -709,13 +184,13 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],3:[function(require,module,exports){
-const { nav } = require('/home/sandro/Repos/nav-spa')
+},{}],2:[function(require,module,exports){
+const nav = require('nav-spa')
 
-nav.on('change-color', ({key, oldValue, newValue}) => {
+nav.on('change-color', ({ key, oldValue, newValue }) => {
   console.log('Nav-state property %o changed value from %o to %o',
-              key, oldValue, newValue)
-  
+    key, oldValue, newValue)
+
   if (!newValue) newValue = 'white'
   document.getElementById('test').style.backgroundColor = newValue
   document.title = `Hello in ${newValue}`
@@ -726,15 +201,14 @@ nav.on('ready', () => {
   document.getElementById('erase-on-start').style.display = 'none'
 })
 
-},{"/home/sandro/Repos/nav-spa":4}],4:[function(require,module,exports){
-const debug = require('debug')('nav-spa-y')
-const KeyedSet = require('keyed-set')
+},{"nav-spa":3}],3:[function(require,module,exports){
+const debug = require('debug')('nav-spa')
 const EventEmitter = require('eventemitter3')
 const whenDomReady = require('when-dom-ready')
 const delay = require('delay')
 const { shallowEqualObjects } = require('shallow-equal')
 
-class NavStateManager extends EventEmitter {
+class NavManager extends EventEmitter {
   constructor (options) {
     super()
 
@@ -743,13 +217,13 @@ class NavStateManager extends EventEmitter {
     this.skipInit = false // for testing in node.js
     this.customPath = undefined
     this.customhash = undefined
-    this.pathPrefix = false  // false=autodetect; should start with /
+    this.pathPrefix = false // false=autodetect; should start with /
     Object.assign(this, options || {})
-    
+
     if (!this.skipInit) this.queueUpInit()
     debug('constructor done')
   }
-  
+
   /*
     Don't init immediately, so others can subscribe before we send out
     the initial batch of changes.  Also, wait for DOM, so they don't
@@ -786,23 +260,27 @@ class NavStateManager extends EventEmitter {
       rootURL = window.location.href
     }
     const parsed = new URL(rootURL)
-    
+
     this.origin = parsed.origin
     if (!this.pathPrefix) {
       this.pathPrefix = parsed.pathname
     }
-    // with file: URLs we simulate the path with a path parameter for dev
-    if (parsed.protocol === 'file:') {
-      this.file = parsed.protocol + parsed.pathname
-    }
 
     if (!thisURL) thisURL = window.location.href
+        // with file: URLs we simulate the path with a path parameter for dev
+    if (thisURL.startsWith('file:')) {
+      const parsed2 = new URL(thisURL)
+      this.file = parsed2.protocol + parsed2.pathname
+      this.origin = parsed2.origin
+      this.pathPrefix = '/'
+    }
+
 
     this.ready = true
     this.updateFromURL(thisURL)
     debug('init complete, this =', this)
   }
-  
+
   // intercept clicks so we don't need onclick all over the place
   onNav (event) {
     debug('onNav intercepting click', event)
@@ -811,7 +289,7 @@ class NavStateManager extends EventEmitter {
         event.altKey ||
         event.ctrlKey ||
         event.defaultPrevented
-       ) {
+    ) {
       debug('ignoring it for one of our initial reasons')
       return
     }
@@ -819,25 +297,26 @@ class NavStateManager extends EventEmitter {
     let href
     if (target.nodeName === 'A') {
       href = target.href
-    }
-    /* this kind of thing was in url-state, but not sure we want it
-       else if (target.nodeName === 'FORM') {
-       if (!target.action || target.action === window.location.href) {
-       event.preventDefault()
-       return
-       }
-       href = target.action
-       } 
-    */
-    else {
+    } else if (target.nodeName === 'FORM') {
+      // This only makes sense for query forms -- data changing forms
+      // are not navigation.
+      if (!target.action || target.action === window.location.href) {
+        event.preventDefault()
+        return
+      }
+      // I believe this wipes out the state, so you'll need to encode
+      // it into hidden fields or something. I'm not using forms at
+      // the moment, so this part's not tested.
+      href = target.action
+    } else {
       return
     }
 
     // because we .open() external ones, we'll never want default
     event.preventDefault()
-    
+
     const url = new URL(href)
-    
+
     debug('.. its a link')
 
     let urlIsOurs = false
@@ -876,7 +355,7 @@ class NavStateManager extends EventEmitter {
     }
     // make copy, because encodeInString removes the properties it encodes
     if (report) report.newState = Object.assign({}, newState)
-    
+
     // debug({newState})
 
     // encode it into a URL
@@ -885,7 +364,7 @@ class NavStateManager extends EventEmitter {
     const sp = url.searchParams
 
     let path = encodeInString(this.customPath, newState) || '/'
-    
+
     const hash = encodeInString(this.customHash, newState)
     if (hash) url.hash = hash
 
@@ -899,9 +378,9 @@ class NavStateManager extends EventEmitter {
       if (this.pathPrefix.endsWith('/')) path = path.slice(1)
       url.pathname = this.pathPrefix + path
       debug('concat pathPrefix %o and path %o to make pathname %o',
-            this.pathPrefix, path, url.pathname)
+        this.pathPrefix, path, url.pathname)
     }
-    
+
     for (const [key, value] of Object.entries(newState)) {
       if (value !== undefined && value !== null && value !== '') {
         let str = value
@@ -909,7 +388,7 @@ class NavStateManager extends EventEmitter {
           str = JSON.stringify(str)
           // but it's up to you to see what's going on and parse it back out;
           // this is just for convience in describing next states.
-        } 
+        }
         sp.append(key, str)
       }
     }
@@ -927,7 +406,7 @@ class NavStateManager extends EventEmitter {
     }
     this.updateFromURL(href)
   }
-  
+
   updateFromURL (url) {
     const atEnd = []
     window.url = url
@@ -966,10 +445,10 @@ class NavStateManager extends EventEmitter {
         debug('stripped prefix from path, leaving:', path)
       } else {
         console.error('app pathname %o doesnt start with app pathPrefix %o',
-                      path, this.pathPrefix)
+          path, this.pathPrefix)
       }
     }
-    
+
     const stateFromPath = decodeFromString(this.customPath, path)
     if (stateFromPath === 'NotFound') {
       console.error('app running at pathname it isnt coded to understand', JSON.stringify(path))
@@ -979,7 +458,6 @@ class NavStateManager extends EventEmitter {
     // bad hash in browsers should fail silently, I believe
     Object.assign(newState, decodeFromString(this.customHash, url.hash, {}))
 
-    
     debug('final newState: %o', newState)
     debug('and   oldState: %o', oldState)
 
@@ -993,8 +471,10 @@ class NavStateManager extends EventEmitter {
         delete this.state[key]
         changed = true
         const newValue = undefined
-        atEnd.push(() => {this.emit(`change-${key}`,
-                                    { key, oldValue, newValue })})
+        atEnd.push(() => {
+          this.emit(`change-${key}`,
+            { key, oldValue, newValue })
+        })
       }
     }
 
@@ -1004,20 +484,22 @@ class NavStateManager extends EventEmitter {
       debug('newstate has', key, newValue, oldValue, oldValue !== newValue)
       if (oldValue !== newValue) {
         this.state[key] = newValue
-        atEnd.push(() => {this.emit(`change-${key}`,
-                                    { key, oldValue, newValue })})
+        atEnd.push(() => {
+          this.emit(`change-${key}`,
+            { key, oldValue, newValue })
+        })
         changed = true
       }
     }
 
     if (changed) {
-      atEnd.push(() => {this.emit(`change`, { newState, oldState })})
+      atEnd.push(() => { this.emit(`change`, { newState, oldState }) })
       if (!shallowEqualObjects(newState, this.state)) {
-        console.error('bug newState!=state', {url, oldState, newState, state: this.state})
+        console.error('bug newState!=state', { url, oldState, newState, state: this.state })
       }
     } else {
       if (!shallowEqualObjects(this.state, oldState)) {
-        console.error('bug oldState!=state when no change', {url, oldState, newState, state: this.state})
+        console.error('bug oldState!=state when no change', { url, oldState, newState, state: this.state })
       }
     }
     debug('final state: %o', this.state)
@@ -1031,12 +513,12 @@ class NavStateManager extends EventEmitter {
       // debug('elem', elem)
       let change = elem.getAttribute('data-link-to-state')
       // debug('change = ', change)
-      change = eval(`( ${change} )`)
+      change = eval(`( ${change} )`) // eslint-disable-line
       // debug('change = ', change)
       const report = {}
       elem.setAttribute('href', this.link(change, report))
       debug('constructed link to state', report.newState)
-      if (shallowEqualObjects( report.newState, this.state )) {
+      if (shallowEqualObjects(report.newState, this.state)) {
         debug(' .. which matches this.state', this.state)
         elem.classList.add('href-to-here')
         elem.classList.remove('href-to-away')
@@ -1059,8 +541,8 @@ class NavStateManager extends EventEmitter {
 function encodeInString (custom, state) {
   let out
   if (custom) {
-    const {unparse, parse} = custom
-    debug('encodeInString', {unparse, parse, state})
+    const { unparse, parse } = custom
+    debug('encodeInString', { unparse, parse, state })
     out = unparse(state)
     if (out === undefined) return out
     const used = parse(out)
@@ -1080,28 +562,31 @@ function encodeInString (custom, state) {
 //
 function decodeFromString (custom, str, ifNotFound = 'NotFound') {
   if (custom) {
-    const {unparse, parse} = custom
-    debug('decodeFromString', {unparse, parse, str})
+    const { unparse, parse } = custom
+    debug('decodeFromString', { unparse, parse, str })
     const state = parse(str)
     if (state === 'NotFound') return ifNotFound
     // just a check ourselves
-    const str2 = encodeInString({unparse, parse}, Object.assign({}, state))
-    if (str != str2) console.error(`nav-spa: decodeFromString loop check failed on ${JSON.stringify(str)} which produced state ${JSON.stringify(state)} which re-encoded as ${JSON.stringify(str2)}`)
+    const str2 = encodeInString({ unparse, parse }, Object.assign({}, state))
+    if (str !== str2) console.error(`nav-spa: decodeFromString loop check failed on ${JSON.stringify(str)} which produced state ${JSON.stringify(state)} which re-encoded as ${JSON.stringify(str2)}`)
     return state
   }
   return {}
 }
 
 // usually it's fine to just have the one instance
-const nav = new NavStateManager()
+const nav = new NavManager()
 
-module.exports = { nav, NavStateManager }
+module.exports = nav
 
+/*
+   for dev
 window.dbg = () => { window.localStorage.setItem('debug', '*') }
 window.ndbg = () => { window.localStorage.setItem('debug', '') }
 window.nav = nav
+*/
 
-},{"debug":5,"delay":7,"eventemitter3":8,"keyed-set":9,"shallow-equal":12,"when-dom-ready":13}],5:[function(require,module,exports){
+},{"debug":4,"delay":6,"eventemitter3":7,"shallow-equal":9,"when-dom-ready":10}],4:[function(require,module,exports){
 (function (process){
 /* eslint-env browser */
 
@@ -1369,7 +854,7 @@ formatters.j = function (v) {
 };
 
 }).call(this,require('_process'))
-},{"./common":6,"_process":2}],6:[function(require,module,exports){
+},{"./common":5,"_process":1}],5:[function(require,module,exports){
 
 /**
  * This is the common logic for both the Node.js and web browser
@@ -1637,7 +1122,7 @@ function setup(env) {
 
 module.exports = setup;
 
-},{"ms":11}],7:[function(require,module,exports){
+},{"ms":8}],6:[function(require,module,exports){
 'use strict';
 
 const createAbortError = () => {
@@ -1707,7 +1192,7 @@ module.exports = delay;
 // TODO: Remove this for the next major release
 module.exports.default = delay;
 
-},{}],8:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 'use strict';
 
 var has = Object.prototype.hasOwnProperty
@@ -2045,282 +1530,7 @@ if ('undefined' !== typeof module) {
   module.exports = EventEmitter;
 }
 
-},{}],9:[function(require,module,exports){
-const EventEmitter = require('events')
-const SmartPatch = require('./smart-patch')
-
-class KeyedSet extends EventEmitter {
-  constructor (source, keyFunction) {
-    // console.log('incoming', {source, keyFunction})
-    if (typeof source === 'function') {
-      keyFunction = source
-      source = undefined
-    }
-    if (!keyFunction) keyFunction = JSON.stringify
-    // console.log('.. result', {source, keyFunction})
-
-    super()
-    this.keyMap = new Map()
-    this.keyFunction = keyFunction
-
-    if (source) {
-      this.addAll(source)
-    }
-  }
-
-  //
-  // Mutating Methods
-  //
-
-  addAll (source) {
-    // console.log('doing addAll %o', source)
-    if (source.keyMap && source.keyFunction === this.keyFunction) {
-      if (this.size === 0) {
-        this.keyMap = new Map(source.keyMap)
-      } else {
-        for (const [k, v] of source.keyMap.entries()) this.keyMap.set(k, v)
-      }
-    } else {
-      for (const i of source) this.add(i)
-    }
-  }
-  add (item) {
-    this.addKey(this.keyFunction(item), item)
-  }
-  addKey (key, item) {
-    const already = this.keyMap.get(key)
-    if (already === undefined) {
-      this.keyMap.set(key, item)
-      this.emit('change', { type: 'add', key, item })
-    }
-  }
-
-  delete (item) {
-    const key = this.keyFunction(item)
-    if (key === undefined) throw Error('delete of item without key, maybe you wanted KeyedSet.deleteKey()')
-    this.deleteKey(key)
-  }
-  deleteKey (key) {
-    const item = this.keyMap.get(key)
-    if (item !== undefined) {
-      this.keyMap.delete(key)
-      this.emit('change', { type: 'delete', key, item })
-    }
-  }
-
-  clear () {
-    this.keyMap.clear()
-    this.emit('change', { type: 'clear' })
-  }
-
-  //
-  // Non-Mutating Methods
-  //
-
-  get size () { return this.keyMap.size }
-
-  has (value) {
-    return this.hasKey(this.keyFunction(value))
-  }
-  hasKey (key) {
-    return this.keyMap.has(key)
-  }
-  get (key) {
-    return this.keyMap.get(key)
-  }
-
-  * entries () {
-    for (const item of this.keyMap.values()) {
-      yield [item, item]
-    }
-  }
-  forEach (f, thisArg) {
-    if (thisArg) {
-      for (const item of this.keyMap.values()) f.apply(thisArg, [item])
-    } else {
-      for (const item of this.keyMap.values()) f(item)
-    }
-  }
-
-  // I know it feels a little weird to return the values of the map
-  // when asked for the keys, but we're pretending to be a set here.
-  keys () {
-    return this.keyMap.values()
-  }
-
-  values () {
-    return this.keyMap.values()
-  }
-
-  * [Symbol.iterator] (value) {
-    for (const i of this.keyMap.values()) yield i
-  }
-
-  //
-  // Our cool stuff
-  //
-
-  clone () {
-    const result = this.cloneEmpty()
-    result.addAll(this)
-    return result
-  }
-  cloneEmpty () {
-    return new this.constructor(this.keyFunction)
-  }
-
-  change (event) {
-    if (event.type === 'add') {
-      this.addKey(event.key, event.item)
-    } else if (event.type === 'delete') {
-      this.deleteKey(event.key)
-    } else if (event.type === 'clear') {
-      this.clear()
-    } else throw Error('bad event type: ' + JSON.stringify(event))
-  }
-
-  patch (patch) {
-    for (const event of patch) this.change(event)
-  }
-
-  changeAll (events) {
-    for (const event of events) this.change(event)
-  }
-
-  // We could also implement this by sorting both lists of keys, then
-  // running through them. That would give us a diff in sort-time plus
-  // linear time.  But I think hash lookup like this is probably fine,
-  // maybe better.
-  minus (other) {
-    const result = this.cloneEmpty()
-    for (const [k, v] of this.keyMap.entries()) {
-      if (other.hasKey(k)) continue
-      result.addKey(k, v)
-    }
-    return result
-  }
-
-  diff (newer) {
-    if (newer.size === 0) {
-      if (this.size === 0) {
-        return new SimplePatch(this)
-      } else {
-        return new SimplePatch(this, { type: 'clear' })
-      }
-    }
-
-    const patch = new SimplePatch(this)
-    const ev = {}
-    ev.add = newer.minus(this)
-    ev.delete = this.minus(newer)
-    for (const type of ['delete', 'add']) {
-      for (const [key, item] of ev[type].keyMap.entries()) {
-        patch.push({ type, key, item })
-      }
-    }
-    return patch
-  }
-
-  mark () {
-    const m = new SmartPatch(this)
-    const handler = change => { m.push(change) }
-    this.on('change', handler)
-    m.close = () => { this.off('change', handler) }
-    return m
-  }
-
-  smartPatch () {
-    return new SmartPatch(this)
-  }
-
-  deepEqual (other) {
-    return this.diff(other).length === 0
-  }
-}
-
-// just a list of change events; which is fine for this.diff()
-class SimplePatch {
-  constructor (base, ...values) {
-    this.base = base
-    this.list = [...values]
-  }
-  get length () {
-    return this.list.length
-  }
-  push (...evs) {
-    this.list.push(...evs)
-  }
-  shift () {
-    return this.list.shift()
-  }
-  [Symbol.iterator] () {
-    return this.list[Symbol.iterator]()
-  }
-}
-
-module.exports = KeyedSet
-module.exports.SmartPatch = SmartPatch
-
-},{"./smart-patch":10,"events":1}],10:[function(require,module,exports){
-// New version, using one Map instead of two KeyedMaps. Simpler, and
-// also keeps the events in the same order, although that shouldn't
-// matter.
-
-class SmartPatch {
-  constructor (base, ...values) {
-    this.cleared = false
-    this.todo = new Map() // key -> Event
-    this.push(...values)
-  }
-  push (...evs) {
-    for (const event of evs) {
-      const { type, key } = event
-      if (type === 'clear') {
-        this.cleared = true
-        this.todo.clear()
-      } else if (type === 'add' || type === 'delete') {
-        const previousSameKey = this.todo.get(key)
-        if (previousSameKey) {
-          if (previousSameKey.type === type) {
-            throw Error() // the Set should never generate this event
-          } else {
-            this.todo.delete(key) // cancel both the previous and this one
-          }
-        } else {
-          this.todo.set(key, event)
-        }
-      } else {
-        throw new Error('unknown event type ' + JSON.stringify(type))
-      }
-    }
-  }
-  shift () {
-    if (this.cleared) {
-      this.cleared = false
-      return { type: 'clear' }
-    }
-    const { value, done } = this.todo.entries().next()
-    if (!done) {
-      let [key, event] = value
-      this.todo.delete(key)
-      return event
-    }
-    return undefined
-  }
-  get length () {
-    return (this.cleared ? 1 : 0) + this.todo.size
-  }
-  * [Symbol.iterator] () {
-    if (this.cleared) yield { type: 'clear' }
-    for (const event of this.todo.values()) {
-      yield event
-    }
-  }
-}
-
-module.exports = SmartPatch
-
-},{}],11:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 /**
  * Helpers.
  */
@@ -2484,7 +1694,7 @@ function plural(ms, msAbs, n, name) {
   return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
 }
 
-},{}],12:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, '__esModule', { value: true });
@@ -2544,7 +1754,7 @@ function shallowEqualArrays(arrA, arrB) {
 exports.shallowEqualArrays = shallowEqualArrays;
 exports.shallowEqualObjects = shallowEqualObjects;
 
-},{}],13:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 (function (global, factory) {
 	typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
 	typeof define === 'function' && define.amd ? define(factory) :
@@ -2597,4 +1807,4 @@ return whenDomReady;
 })));
 
 
-},{}]},{},[3]);
+},{}]},{},[2]);
