@@ -968,6 +968,8 @@ class NavStateManager extends EventEmitter {
     } else {
       if (path.startsWith(this.pathPrefix)) {
         path = path.slice(this.pathPrefix.length)
+        // path prefix might end in / or not, we dont know
+        if (!path.startsWith('/')) path = '/' + path
       } else {
         console.error('app pathname %o doesnt start with app pathPrefix %o',
                       path, this.pathPrefix)
