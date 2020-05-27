@@ -25,9 +25,17 @@ class NavManager extends EventEmitter {
     the initial batch of changes.  Also, wait for DOM, so they don't
     need to. Also, wait one more tick, in case they unnecessarily wait
     for the DOM before subscribing.
+
+    ER, no, how about instead having a nav.emitCurrentState() which
+    you can call after DOM loaded, if that's how you roll.  I want
+    link available at the start.
+
+    Well, for now, I'll let folks call nav.init() themselves.
   */
   async queueUpInit () {
     await whenDomReady()
+    this.domReady = true
+    this.emit('dom-ready')
     debug('dom ready')
     await delay(1) // allow other dom-ready hooks to run, just in case
     this.init()
@@ -35,6 +43,8 @@ class NavManager extends EventEmitter {
     this.emit('ready', this) // maybe handy; now you can use 'link'
   }
   init (rootURL, thisURL) {
+    if (this.ready) return // allow repeated inits
+    
     window.addEventListener('popstate', (event) => {
       this.updateFromURL(document.location)
       // ignore event.state; we believe any state restored by the BACK
@@ -49,7 +59,7 @@ class NavManager extends EventEmitter {
     if (!rootURL) {
       const rel = document.querySelector('link[rel="start"]')
       if (rel) {
-        rootURL = rel.getAttribute('href')
+        rootURL = (new URL(rel.getAttribute('href'), window.location.href)).href
       }
     }
     if (!rootURL) {
@@ -70,7 +80,6 @@ class NavManager extends EventEmitter {
       this.origin = parsed2.origin
       this.pathPrefix = '/'
     }
-
 
     this.ready = true
     this.updateFromURL(thisURL)
@@ -143,6 +152,7 @@ class NavManager extends EventEmitter {
   // give some extra details in the report object
   link (change, report) {
     if (!this.ready) console.error('nav.link called before ready')
+    
     let newState = Object.assign({}, this.state)
     if (typeof change === 'function') {
       newState = change(newState)
@@ -300,6 +310,17 @@ class NavManager extends EventEmitter {
     }
     debug('final state: %o', this.state)
 
+    this.scanDataLinks()
+
+    // save the emits for the end, because they might call nav.jump
+    // which would land as back in this function, on a re-entrant
+    // call, which isn't going to work well, since they're sharing
+    // this.state and we have a promise to emit changes in the order
+    // they happen.
+    for (const f of atEnd) f()
+  }
+
+  scanDataLinks () {
     // Modify href fields set with data-link-to-state so they are
     // relative to the current state.  This is important for things
     // like folks copying the URL following it. We could use that
@@ -309,7 +330,12 @@ class NavManager extends EventEmitter {
       // debug('elem', elem)
       let change = elem.getAttribute('data-link-to-state')
       // debug('change = ', change)
-      change = eval(`( ${change} )`) // eslint-disable-line
+      try {
+        change = eval(`( ${change} )`) // eslint-disable-line
+      } catch (e) {
+        console.error('nav-spa.scanDataLinks.eval: ', e)
+        change = {}
+      }
       // debug('change = ', change)
       const report = {}
       elem.setAttribute('href', this.link(change, report))
@@ -324,13 +350,6 @@ class NavManager extends EventEmitter {
         elem.classList.remove('href-to-here')
       }
     }
-
-    // save the emits for the end, because they might call nav.jump
-    // which would land as back in this function, on a re-entrant
-    // call, which isn't going to work well, since they're sharing
-    // this.state and we have a promise to emit changes in the order
-    // they happen.
-    for (const f of atEnd) f()
   }
 }
 

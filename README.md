@@ -45,7 +45,7 @@ like this:
 
 This module looks for `data-link-to-state` attributes and adds the
 right href to get us to that state. The state is a JS expression which
-is eval'd to produce a state overlay object.  And properties not
+is eval'd to produce a state overlay object.  Any properties not
 mentioned in the overlay remain unchanged; set them to null or '' to
 remove them.  They're always strings, so for our purposes '', null,
 and undefined are the same. (Actually, you can provide a non-string
@@ -68,6 +68,23 @@ animation done without this library (see cheating.html in the same
 directory to compare.). For that example, we don't put the state in
 the browser history.  (Imagine clicking back through your history, one
 animation frame at a time!)
+
+## Statup and Initial State
+
+Nothing happens until the DOM is ready.  Then:
+
+1. nav emits dom-ready
+2. nav emits change-X events for each param X in the URL
+3. nav emits ready
+
+After that, additional nav.change events will fire in response to
+nav.jump, the user clicking on state links, or the user navigating
+forward or backward in the browser history. If the user edits the URL,
+that's the same as an initial startup.
+
+Always validate the new state value, since users can edit it at
+will. The empty string should be understand as the default, or changed
+(using nav.jump) to be some non-empty default value.
 
 ## Custom Paths
 
