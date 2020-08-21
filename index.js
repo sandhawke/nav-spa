@@ -1,8 +1,12 @@
 const debug = require('debug')('nav-spa')
 const EventEmitter = require('eventemitter3')
-const whenDomReady = require('when-dom-ready')
+let whenDomReady = require('when-dom-ready')
 const delay = require('delay')
 const { shallowEqualObjects } = require('shallow-equal')
+
+// console.error('whenDomReady is %O', whenDomReady) workaround for
+// mixed module systems, when this is imported by es6 module
+if (whenDomReady.default) whenDomReady = whenDomReady.default
 
 class NavManager extends EventEmitter {
   constructor (options) {
@@ -33,6 +37,8 @@ class NavManager extends EventEmitter {
     Well, for now, I'll let folks call nav.init() themselves.
   */
   async queueUpInit () {
+    // if (typeof whenDomReady !== 'function') {
+    // console.error('whenDomReady is actually %O', whenDomReady)
     await whenDomReady()
     this.domReady = true
     this.emit('dom-ready')
